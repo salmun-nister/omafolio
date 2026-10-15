@@ -396,6 +396,27 @@ test("empty input yields no points", () => {
   assert.deepEqual(combinedSeries(h, { VOO: series("VOO", "USD", []) }, usdQuotes, "1D", "USD").points, []);
 });
 
+// ---- MAX_BUCKETS guard
+
+test("a grid larger than any range can need draws nothing instead of walking it", () => {
+  const h = [{ asset: "VOO", quantity: 1, cost: 1 }];
+  // A year of daily points on the 1D grid is ~24k buckets: the mismatched-pair bug
+  // (a range change evaluating with the previous range's series), which with a real
+  // portfolio is ~1e8 points on the GUI thread.
+  const year = series("VOO", "USD", Array.from({ length: 250 }, (_, i) => [noon(0) + i * DAY, 100]));
+  assert.deepEqual(combinedSeries(h, { VOO: year }, usdQuotes, "1D", "USD"),
+    { asset: "portfolio", currency: "USD", points: [] });
+  // The same series on its own range is untouched.
+  assert.equal(combinedSeries(h, { VOO: year }, usdQuotes, "1Y", "USD").points.length, 250);
+  // The widest legitimate 1D grid - a fund's five daily points (4 days), and a window
+  // stretched by a holiday (10 days) - still renders in full. Raising MAX_BUCKETS for a
+  // wider provider window means updating these two on purpose.
+  const fund = series("VOO", "USD", [0, 1, 2, 3, 4].map((d) => [noon(0) + d * DAY, 100]));
+  assert.equal(combinedSeries(h, { VOO: fund }, usdQuotes, "1D", "USD").points.length, 4 * 96 + 1);
+  const holiday = series("VOO", "USD", Array.from({ length: 11 }, (_, i) => [noon(0) + i * DAY, 100]));
+  assert.equal(combinedSeries(h, { VOO: holiday }, usdQuotes, "1D", "USD").points.length, 10 * 96 + 1);
+});
+
 // ---- rangeChange
 
 test("rangeChange", () => {
