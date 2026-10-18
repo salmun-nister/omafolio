@@ -197,3 +197,14 @@ test("a cash reference is named by its currency", () => {
   assert.equal(shortName("cash:EUR"), "EUR cash");
   assert.equal(shortName("crypto:bitcoin"), "bitcoin");
 });
+
+test("portfolio: cash, which never closes, does not keep the frame from showing closed", () => {
+  const positions = [
+    { asset: "VOO", value: 100, state: "closed" },
+    { asset: "cash:AUD", value: 50, state: "live" },
+    { asset: "cash:EUR", value: 50, state: "live" },
+  ];
+  assert.equal(barFrame("portfolio", data({ portfolio: view({ positions }) })).state, "closed");
+  // Cash alone is not a market: the frame stays live.
+  assert.equal(barFrame("portfolio", data({ portfolio: view({ positions: positions.slice(1) }) })).state, "live");
+});

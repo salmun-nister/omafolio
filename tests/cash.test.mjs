@@ -54,10 +54,34 @@ test("starting cost: 1 for base cash, the current rate when known, else 0", () =
 
 test("search: by code or name, case-insensitive, blank finds nothing", () => {
   assert.deepEqual(searchCash("eur")[0], { asset: "cash:EUR", symbol: "EUR cash", name: "Euro", kind: "cash", exchange: "Cash" });
+  assert.equal(searchCash("euro")[0].asset, "cash:EUR");
   assert.equal(searchCash("yen")[0].asset, "cash:JPY");
   assert.equal(searchCash("Swiss")[0].asset, "cash:CHF");
   assert.deepEqual(searchCash("  "), []);
   assert.deepEqual(searchCash("zzz"), []);
+});
+
+test("search: codes match from two letters, names from a word's start from three", () => {
+  // Short tickers ("T", "KO", "MA") must not be buried under currencies.
+  assert.deepEqual(searchCash("t"), []);
+  assert.deepEqual(searchCash("ko"), []);
+  assert.deepEqual(searchCash("ma"), []);
+  assert.deepEqual(searchCash("kor").map((r) => r.asset), ["cash:KRW", "cash:CZK"]);
+  assert.deepEqual(searchCash("US").map((r) => r.asset), ["cash:USD"]);
+  assert.deepEqual(searchCash("dollar").map((r) => r.asset).slice(0, 3), ["cash:USD", "cash:AUD", "cash:CAD"]);
+});
+
+test("cash series: never start later than the history they are charted with", () => {
+  // At 23:15 UTC Yahoo's 1D rate has only just begun (its day starts at 23:00 UTC), while a
+  // stock's 1D series began at the open. The cash series holds the rate's first value back
+  // to that start, as portfolio.combinedSeries does for exchange rates, so holding foreign
+  // cash does not cut the portfolio chart down to minutes.
+  const start = NOW - 10 * 3600 * 1000;
+  const voo = { asset: "VOO", currency: "USD", points: [[start, 500], [NOW - 3 * 3600 * 1000, 510]] };
+  const eur = { asset: "EURAUD=X", currency: "AUD", points: [[NOW - 900000, 1.6], [NOW, 1.61]] };
+  const out = cashSeries(["cash:EUR", "cash:AUD"], { VOO: voo, "EURAUD=X": eur }, "AUD", "1D", NOW);
+  assert.deepEqual(out["cash:EUR"].points, [[start, 1.6], [NOW - 900000, 1.6], [NOW, 1.61]]);
+  assert.equal(out["cash:AUD"].points[0][0], start);
 });
 
 test("history sources: cash becomes its rate pair, base cash needs nothing", () => {
