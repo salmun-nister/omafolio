@@ -236,3 +236,9 @@ test("manual refresh inside the window is refused", () => {
   assert.equal(canFetchNow(T0, 60, T0 + 60000), true);
   assert.equal(canFetchNow(null, 60, T0), true);
 });
+
+test("fx pairs include the rates followed cash needs", () => {
+  const quotes = { VOO: q("VOO", "USD") };
+  assert.deepEqual(fxPairs(quotes, [], "AUD", ["cash:EUR", "cash:AUD", "VOO", "cash:USD"]), ["EURAUD=X", "USDAUD=X"]);
+  assert.deepEqual(fxPairs(quotes, [], "AUD"), ["USDAUD=X"]);
+});

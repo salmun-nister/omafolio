@@ -57,3 +57,10 @@ test("parse dispatches on request.provider", () => {
 test("parse throws ProviderError for an unknown provider", () => {
   assert.throws(() => parse({ provider: "nope", type: "quotes", url: "", assets: [] }, 200, "[]"), ProviderError);
 });
+
+test("cash routes to Yahoo, whose rates price it, but is never put in a request", () => {
+  assert.equal(providerFor("cash:EUR").id, "yahoo");
+  assert.deepEqual(quoteRequests(["cash:EUR"]), []);
+  assert.deepEqual(historyRequests(["cash:EUR"], "1M", () => undefined), []);
+  assert.deepEqual(quoteRequests(["cash:EUR", "VOO"])[0].assets, ["VOO"]);
+});

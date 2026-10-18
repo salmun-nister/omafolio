@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { barFrame, displayPrice } from "../lib/barframe.mjs";
+import { barFrame, displayPrice, shortName } from "../lib/barframe.mjs";
 
 const FRI_1600 = new Date(2026, 9, 9, 16, 0).getTime();
 const FAIL_1402 = new Date(2026, 9, 9, 14, 2).getTime();
@@ -191,4 +191,9 @@ test("portfolio frame stays plain in the base currency whatever nativePrices say
     const f = barFrame("portfolio", data({ baseCurrency: "AUD", nativePrices }));
     assert.equal(f.value, "412,300");
   }
+});
+
+test("a cash reference is named by its currency", () => {
+  assert.equal(shortName("cash:EUR"), "EUR cash");
+  assert.equal(shortName("crypto:bitcoin"), "bitcoin");
 });
