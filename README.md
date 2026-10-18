@@ -69,8 +69,9 @@ While every Yahoo market in play is closed, Yahoo prices are fetched every 15
 minutes instead of every `refreshSeconds`. If a provider fails, requests to it
 back off from 60 seconds up to 15 minutes.
 
-An asset reference is a Yahoo Finance symbol (`VOO`, `AAPL`, `VTSAX`), or
-`crypto:` followed by a CoinGecko id (`crypto:bitcoin`). The search box on the
+An asset reference is a Yahoo Finance symbol (`VOO`, `AAPL`, `VTSAX`),
+`crypto:` followed by a CoinGecko id (`crypto:bitcoin`), or `cash:` followed by
+a currency code (`cash:EUR`, see [Cash](#cash)). The search box on the
 settings page finds the right reference for you.
 
 ### Currencies
@@ -138,6 +139,28 @@ If `portfolio.json` is a symlink (say, into a synced folder), the first save
 replaces the link with a regular file and leaves the link's target as it was.
 This is deliberate: the plugin never writes through a symlink. Keep the real
 file at that path if you want saves to land in it.
+
+### Cash
+
+Money waiting to be invested can be held too, in any currency Yahoo has an
+exchange rate for. Type the currency's code or name ("EUR", "euro", "yen") in
+the holdings search and pick `EUR cash`. In the file it is an ordinary entry:
+
+```json
+{ "asset": "cash:EUR", "quantity": 5000, "cost": 1.62, "costCurrency": "AUD" }
+```
+
+- `quantity` is the amount of the currency you hold.
+- `cost` is the rate you converted at: how much of `costCurrency` one unit cost
+  (here A$1.62 per euro). The settings page starts it at today's rate, so new
+  cash starts at no gain; change it to the rate you actually got.
+
+Foreign cash is valued at Yahoo's exchange rate into your base currency
+(`EURAUD=X`), and moves with it: its row shows the rate's move over the picked
+range, its sparkline is the rate, and its unrealised gain is what the rate has
+done since you converted. Cash in your base currency is worth its amount and
+never moves. Cash can also be watched or put in the bar, where it shows the
+exchange rate.
 
 To back up your holdings, copy the file. The settings page has an "Open folder"
 button.

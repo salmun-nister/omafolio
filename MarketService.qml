@@ -7,6 +7,7 @@ import "lib/portfolio.mjs" as Portfolio
 import "lib/holdings.mjs" as Holdings
 import "lib/quotecache.mjs" as QuoteCache
 import "lib/providers/index.mjs" as Providers
+import "lib/cash.mjs" as Cash
 
 // Prices, history, search and holdings for the widget and panel. This is the
 // plugin's only I/O: curl (through Fetcher), timers and two files (written
@@ -19,6 +20,9 @@ import "lib/providers/index.mjs" as Providers
 //   Assets come from holdings and settings, plus the FX pairs the portfolio
 //   needs; a round starts straight away whenever new assets appear (including
 //   FX pairs learnt from a response) and never when there is nothing to fetch.
+//   Cash is never fetched: its quotes, states and history are derived from the
+//   exchange rates it is priced with (lib/cash.mjs) and merged into what this
+//   object publishes.
 // - Holdings: ~/.local/share/omafolio/portfolio.json, watched for edits. A file
 //   that does not parse sets holdingsError and is never written over.
 // - Quote cache: ~/.cache/omafolio/quotes.json, loaded at startup (those quotes
@@ -52,8 +56,8 @@ QtObject {
 
   // The settings in effect (lib/settings.mjs Settings).
   readonly property var config: normalized.settings
-  // Latest quote per asset, FX pairs included: Record<AssetRef, Quote>.
-  property var quotes: ({})
+  // Latest quote per asset, FX pairs and cash included: Record<AssetRef, Quote>.
+  readonly property var quotes: Object.assign({}, fetched, Cash.cashQuotes(followed, fetched, config.baseCurrency, clock))
   // Price state of every quote and every asset being fetched:
   // Record<AssetRef, PriceState>. Recomputed on every data change and every
   // 15 s, since staleness depends on the time.
@@ -82,9 +86,11 @@ QtObject {
     : ""].filter(function(line) { return line !== "" }).join(" ")
   // Epoch ms of the last successful quote round of any provider, or null.
   property var lastUpdated: null
-  // SearchResult[] for the latest search(): Yahoo first, then CoinGecko, one
-  // per asset.
+  // SearchResult[] for the latest search(): matching currencies as cash first
+  // (lib/cash.mjs, known at once), then Yahoo, then CoinGecko, one per asset.
   property var searchResults: []
+  // The cash part of searchResults for the latest query.
+  property var searchCash: []
   // The (trimmed) query `searchResults` answers, and whether answers to it are
   // still coming.
   property string searchQuery: ""
@@ -126,14 +132,15 @@ QtObject {
   // fetched in the background, except from a provider resting after a failed
   // quote or history request (market.inBackoff); bindings that call this
   // re-evaluate when they land. An asset the provider has no history for is
-  // absent from the result.
+  // absent from the result. Cash is drawn from its exchange rate's history,
+  // which is what gets fetched for it (lib/cash.mjs).
   function history(assets, range) {
     var cache = historyCache
     var now = clock
     var maxAge = config.refreshSeconds * 1000
     var out = {}
     var due = []
-    for (const asset of assets) {
+    for (const asset of Cash.historySources(assets, config.baseCurrency)) {
       var key = historyKey(range, asset)
       var entry = cache[key]
       if (entry && entry.series) out[asset] = entry.series
@@ -146,11 +153,12 @@ QtObject {
       }
       historyPump.restart()
     }
-    return out
+    return Object.assign(out, Cash.cashSeries(assets, out, config.baseCurrency, range, now))
   }
 
-  // Searches both providers for `query`; results replace `searchResults` as
-  // each provider answers. A blank query clears them. Answers to an older query
+  // Searches both providers for `query`, and the currencies cash can be held
+  // in; results replace `searchResults` at once (cash) and as each provider
+  // answers. A blank query clears them. Answers to an older query
   // are ignored.
   function search(query) {
     var q = String(query === undefined || query === null ? "" : query).trim()
@@ -158,7 +166,8 @@ QtObject {
     searchQuery = q
     searchUrls = requests.map(function(r) { return r.url })
     searchByProvider = {}
-    searchResults = []
+    searchCash = Cash.searchCash(q)
+    publishSearch()
     searchFetcher.fetch(requests)
   }
 
@@ -187,12 +196,18 @@ QtObject {
   readonly property string holdingsPath: home + "/.local/share/omafolio/portfolio.json"
   readonly property string cachePath: home + "/.cache/omafolio/quotes.json"
 
+  // Latest quote per fetched asset (cash is derived from these, never fetched):
+  // Record<AssetRef, Quote>.
+  property var fetched: ({})
+
   // The host hands settings over as Qt types (lists are not JS arrays), so they
   // are copied into plain JSON values before validation.
   readonly property var normalized: Settings.normalizeSettings(plainJson(settings))
-  // Assets the user follows, and the FX pairs needed to value them.
-  readonly property var wanted: Market.assetsToFetch(config, holdings)
-  readonly property var fx: Market.fxPairs(quotesOf(wanted), holdings, config.baseCurrency)
+  // Assets the user follows (cash included), those that are fetched (cash is
+  // not), and the FX pairs needed to value them.
+  readonly property var followed: Market.assetsToFetch(config, holdings)
+  readonly property var wanted: followed.filter(function(a) { return !Cash.isCash(a) })
+  readonly property var fx: Market.fxPairs(quotesOf(wanted), holdings, config.baseCurrency, followed)
   // Assets requested whose provider answered without them (unknown symbols).
   property var notFoundAssets: ({})
   // Now, in epoch ms, advanced every 15 s so time-dependent bindings update.
@@ -235,7 +250,7 @@ QtObject {
 
   function quotesOf(assets) {
     var out = {}
-    for (const asset of assets) if (quotes[asset]) out[asset] = quotes[asset]
+    for (const asset of assets) if (fetched[asset]) out[asset] = fetched[asset]
     return out
   }
 
@@ -247,27 +262,27 @@ QtObject {
   }
 
   function kindOf(asset) {
-    var quote = quotes[asset]
+    var quote = fetched[asset]
     return quote ? quote.kind : undefined
   }
 
   function priceStates() {
     var now = clock
     var out = {}
-    var assets = Object.keys(quotes).concat(wanted, fx)
+    var assets = Object.keys(fetched).concat(wanted, fx)
     for (const asset of assets) {
       out[asset] = notFoundAssets[asset]
         ? "missing"
-        : Market.priceState(quotes[asset], providerHealth[Providers.providerFor(asset).id], now)
+        : Market.priceState(fetched[asset], providerHealth[Providers.providerFor(asset).id], now)
     }
-    return out
+    return Object.assign(out, Cash.cashStates(followed, out, config.baseCurrency))
   }
 
   // Merges a provider's answer to `requested` (AssetRef[]); requested assets
   // that still have no quote at all are marked not found until one arrives.
   function acceptQuotes(requested, fresh) {
-    quotes = Market.mergeQuotes(quotes, fresh, Date.now())
-    var missing = Market.notFound(requested, quotes)
+    fetched = Market.mergeQuotes(fetched, fresh, Date.now())
+    var missing = Market.notFound(requested, fetched)
     var next = Object.assign({}, notFoundAssets)
     for (const asset of requested) {
       if (missing.indexOf(asset) >= 0) next[asset] = true
@@ -316,12 +331,12 @@ QtObject {
   // Adopts cached quotes (lib/quotecache.mjs drops malformed entries) for
   // assets that have no fresher quote yet.
   function cacheRead(text) {
-    quotes = Object.assign(QuoteCache.parseQuoteCache(text), quotes)
+    fetched = Object.assign(QuoteCache.parseQuoteCache(text), fetched)
     cacheText = text
   }
 
   function writeCache() {
-    var text = QuoteCache.serializeQuoteCache(quotes)
+    var text = QuoteCache.serializeQuoteCache(fetched)
     if (text === cacheText) return
     cacheText = text
     cacheWriter.write(text)
@@ -361,7 +376,7 @@ QtObject {
 
   function publishSearch() {
     var seen = {}
-    var out = []
+    var out = searchCash.slice()
     for (const provider of ["yahoo", "coingecko"]) {
       for (const result of searchByProvider[provider] || []) {
         if (seen[result.asset]) continue
@@ -439,7 +454,7 @@ QtObject {
         cacheDebounce.restart()
       }
       roundFailed = false
-      timer.interval = Market.nextDelayMs(provider, service.quotes, health, service.config.refreshSeconds, now)
+      timer.interval = Market.nextDelayMs(provider, service.fetched, health, service.config.refreshSeconds, now)
       timer.restart()
     }
 

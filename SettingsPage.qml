@@ -7,6 +7,7 @@ import "lib/settings.mjs" as Settings
 import "lib/settingspage.mjs" as PageLib
 import "lib/holdings.mjs" as Holdings
 import "lib/format.mjs" as Format
+import "lib/cash.mjs" as Cash
 
 // The panel's settings page, opened from the gear. Every change saves at once:
 // settings to the widget's shell.json entry, holdings to portfolio.json through
@@ -112,10 +113,12 @@ FocusScope {
   }
 
   // Adds a searched asset as a holding (or finds the one already held) and puts
-  // the cursor in its quantity field.
+  // the cursor in its quantity field. Cash starts at the current rate, so at no
+  // gain; anything else at a cost of 0.
   function addHolding(result) {
     unfocus()
-    var added = Holdings.addHolding(holdings, result.asset, base)
+    var cost = Cash.isCash(result.asset) ? Cash.startingCost(result.asset, quotes, base) : 0
+    var added = Holdings.addHolding(holdings, result.asset, base, cost)
     if (added.added && !saveHoldings(added.holdings)) return
     holdingSearch.clear()
     // Adding a row rebuilds the rows; focus the new one once that is done.
@@ -1112,7 +1115,7 @@ FocusScope {
       width: column.width
       topPadding: Style.space(4)
       visible: page.holdings.length > 0 && !page.locked
-      text: "Avg cost is in the asset's own currency unless you change it with ▾."
+      text: "Avg cost is in the asset's own currency unless you change it with ▾. For cash, quantity is the amount and avg cost the rate you converted at."
     }
 
     Item { width: 1; height: Style.space(8); visible: !page.locked }
