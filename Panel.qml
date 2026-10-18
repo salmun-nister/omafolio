@@ -10,7 +10,7 @@ import "lib/panel.mjs" as PanelLib
 // - Watchlist: one row per watched asset.
 // Clicking a row (or j/k) turns the hero into that asset and highlights the row;
 // "← Portfolio" or Esc goes back. The range picker (1D/1W/1M/1Y, opening on the
-// `range` setting) drives the chart and the row sparklines; history is asked of
+// `range` setting) drives the chart, the row sparklines and the rows' moves; history is asked of
 // MarketService while the panel is open. The gear opens the settings page.
 //
 // Owns only view state (tab, selected row, range). What each line says comes
@@ -161,7 +161,7 @@ Panel {
   }) : null
 
   readonly property bool portfolioTab: tab === "portfolio"
-  readonly property var rows: !panelData ? [] : (portfolioTab ? PanelLib.portfolioRows(panelData) : PanelLib.watchRows(panelData))
+  readonly property var rows: !panelData ? [] : (portfolioTab ? PanelLib.portfolioRows(panelData, seriesByAsset, range) : PanelLib.watchRows(panelData, seriesByAsset, range))
   // The selected row, while it is still in the list, and its asset.
   readonly property var shownRow: selected !== "" && indexOf(selected) >= 0 ? rows[indexOf(selected)] : null
   readonly property string shownAsset: shownRow ? shownRow.asset : ""

@@ -16,8 +16,10 @@ should be updating but is not is marked with a warning.
 *Sped up: each item shows for 5 seconds by default.*
 
 The panel has Portfolio and Watchlist tabs, a chart for 1D, 1W, 1M or 1Y, and a
-row with a sparkline for every asset. Click a row, or step through rows with
-`j` and `k`, to see that position on its own.
+row with a sparkline for every asset. Each row's percentage is its move over the
+range you pick: the day move on 1D, otherwise the change across its sparkline.
+Click a row, or step through rows with `j` and `k`, to see that position on its
+own.
 
 | Portfolio | One position | Watchlist |
 | --- | --- | --- |
@@ -79,7 +81,7 @@ in the currency it trades in (VOO in US dollars), and crypto is priced in US
 dollars. With `nativePrices` on (the default) the bar and the watchlist show
 those prices as they are; turned off, they are converted to `baseCurrency` at
 the current exchange rate, or left as they are while no rate is known yet. The
-day move percentage is the asset's own either way. The position view always
+percentage moves are the asset's own either way. The position view always
 shows quantity × price in the asset's own currency.
 
 Every amount in a currency other than `baseCurrency` carries its currency, so

@@ -101,6 +101,36 @@ test("watch row day move needs a positive previous close", () => {
   assert.equal(watchRows(make({ quotes: zero, watch: ["NVDA"] }))[0].change, "—");
 });
 
+test("rows show the move over the picked range, from the series their sparkline draws", () => {
+  const byAsset = {
+    VOO: series("VOO", [700, 735]),
+    VTSAX: series("VTSAX", [200, 190]),
+    NVDA: series("NVDA", [150, 190.5]),
+  };
+  const portfolio = portfolioRows(make(), byAsset, "1M");
+  assert.deepEqual(portfolio.map((r) => [r.asset, r.change, r.direction]), [
+    ["VOO", "▲ 5.0%", "up"],
+    ["VTSAX", "▼ 5.0%", "down"],
+    // No series yet: blank, rather than the day move under the range's name.
+    ["crypto:bitcoin", "", "flat"],
+  ]);
+  const watch = watchRows(make({ watch: ["NVDA"] }), byAsset, "1Y");
+  assert.deepEqual([watch[0].change, watch[0].direction], ["▲ 27.0%", "up"]);
+});
+
+test("rows on 1D keep the quote's day move, whatever the 1D series says", () => {
+  const byAsset = { VOO: series("VOO", [100, 200]), NVDA: series("NVDA", [100, 200]) };
+  assert.equal(portfolioRows(make(), byAsset, "1D")[0].change, "▲ 0.6%");
+  assert.equal(watchRows(make({ watch: ["NVDA"] }), byAsset, "1D")[0].change, "▼ 0.8%");
+});
+
+test("a row left out of the total shows no range move either", () => {
+  const extra = holdings.concat([{ asset: "VOOO", quantity: 1, cost: 1 }]);
+  const row = portfolioRows(make({ holdings: extra, states: Object.assign({ VOOO: "missing" }, closedStates) }),
+    { VOOO: series("VOOO", [1, 2]) }, "1W").pop();
+  assert.deepEqual([row.change, row.direction], ["", "flat"]);
+});
+
 test("empty watchlist gives no rows", () => {
   assert.deepEqual(watchRows(make({ watch: [] })), []);
 });
