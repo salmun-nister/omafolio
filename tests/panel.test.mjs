@@ -6,6 +6,7 @@ import {
 } from "../lib/panel.mjs";
 import { valuePortfolio } from "../lib/portfolio.mjs";
 import { holdingKey } from "../lib/holdings.mjs";
+import { cashQuotes, cashStates } from "../lib/cash.mjs";
 
 const SAT_1400 = new Date(2026, 9, 10, 14, 0).getTime();
 const SAT_0700 = new Date(2026, 9, 10, 7, 0).getTime();
@@ -441,4 +442,40 @@ test("a position valued with a stale cost-currency rate says so on its row and h
   assert.equal(assetHero("AAPL", staleEur, eurRow.key).tooltip, "Includes 1 stale price: EURUSD=X as of Sat 07:00");
   // The USD-cost holding does not use that rate.
   assert.equal(usdRow.tooltip, "");
+});
+
+// ---- Cash
+
+const eurRate = q("EURAUD=X", "EURAUD=X", "EUR/AUD", 1.65, 1.64, "AUD", "fx", "yahoo",
+  { session: { start: 0, end: 1, timezone: "Europe/London" }, dayRange: { low: 1.63, high: 1.66 } });
+const cashHeld = [{ asset: "cash:EUR", quantity: 5000, cost: 1.6, costCurrency: "AUD" }];
+/** Panel data with cash merged in as MarketService publishes it. */
+const cashData = (rateState, extraHoldings = []) => {
+  const held = cashHeld.concat(extraHoldings);
+  const assets = held.map((h) => h.asset);
+  const rates = { "EURAUD=X": eurRate };
+  const fetchedStates = { "EURAUD=X": rateState, "XYZAUD=X": "missing" };
+  return make({
+    holdings: held,
+    quotes: Object.assign({}, rates, cashQuotes(assets, rates, "AUD", SAT_1400)),
+    states: Object.assign({}, fetchedStates, cashStates(assets, fetchedStates, "AUD")),
+  });
+};
+
+test("a cash hero shows amount × rate and its average rate", () => {
+  const hero = assetHero("cash:EUR", cashData("live"), position("cash:EUR", "AUD"));
+  assert.deepEqual([hero.title, hero.subLabel, hero.details[0]], ["EUR cash · Euro", "5,000 × $1.65", { label: "Avg rate", value: "$1.60" }]);
+  assert.equal(assetHero("VOO", make(), position("VOO")).details[0].label, "Avg cost");
+});
+
+test("cash rows: not found for an unknown currency, the stale warning from its rate", () => {
+  const rows = portfolioRows(cashData("live", [{ asset: "cash:XYZ", quantity: 1, cost: 1, costCurrency: "AUD" }]));
+  const xyz = rows.find((r) => r.asset === "cash:XYZ");
+  assert.deepEqual([xyz.label, xyz.value, xyz.tooltip], ["XYZ cash", "not found", "XYZ cash not found, not included"]);
+  const stale = portfolioRows(cashData("stale")).find((r) => r.asset === "cash:EUR");
+  assert.deepEqual([stale.label, stale.value, stale.tooltip], ["EUR cash", "$8,250", "Includes 1 stale price: EUR cash as of Sat 07:00"]);
+});
+
+test("cash does not count towards Markets closed", () => {
+  assert.deepEqual(statusLines(["cash:EUR"], cashData("closed")), []);
 });

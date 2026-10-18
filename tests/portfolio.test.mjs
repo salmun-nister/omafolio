@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { fxRate, valuePortfolio, combinedSeries, rangeChange } from "../lib/portfolio.mjs";
+import { cashQuotes, cashStates, cashSeries } from "../lib/cash.mjs";
 
 const near = (a, b) => Math.abs(a - b) < 1e-9;
 const q = (asset, price, previousClose, currency, kind = "stock") => ({
@@ -422,4 +423,50 @@ test("one asset held in two cost currencies: each position keeps its holding, an
   assert.notEqual(stale.positions[0].key, stale.positions[1].key);
   const missing = valuePortfolio(two, {}, {}, "USD");
   assert.deepEqual(missing.excluded, ["AAPL"]);
+});
+
+// ---- Cash (lib/cash.mjs derives its quotes, states and series from exchange rates)
+
+const cents = (n) => Math.round(n * 100) / 100; // rates are binary fractions
+const CASH_NOW = Date.UTC(2026, 9, 16, 12);
+const rateQuote = (asset, price, previousClose, currency) => ({
+  asset, symbol: asset, name: asset, price, previousClose, currency, kind: "fx", asOf: CASH_NOW, session: null, provider: "yahoo",
+});
+const cashHoldings = [
+  { asset: "cash:EUR", quantity: 5000, cost: 1.6, costCurrency: "AUD" },
+  { asset: "cash:AUD", quantity: 2000, cost: 1, costCurrency: "AUD" },
+];
+/** Quotes and states as MarketService publishes them: fetched rates plus derived cash. */
+const withCash = (rates, base) => {
+  const assets = cashHoldings.map((h) => h.asset);
+  const fetchedStates = Object.fromEntries(Object.keys(rates).map((a) => [a, "live"]));
+  return {
+    quotes: Object.assign({}, rates, cashQuotes(assets, rates, base, CASH_NOW)),
+    states: Object.assign({}, fetchedStates, cashStates(assets, fetchedStates, base)),
+  };
+};
+
+test("cash is valued at the rate, moves with it, and gains against the rate converted at", () => {
+  const { quotes, states } = withCash({ "EURAUD=X": rateQuote("EURAUD=X", 1.65, 1.64, "AUD") }, "AUD");
+  const p = valuePortfolio(cashHoldings, quotes, states, "AUD");
+  const eur = p.positions.find((x) => x.asset === "cash:EUR");
+  assert.deepEqual([eur.value, eur.dayChange, eur.gain].map(cents), [8250, 50, 250]);
+  assert.equal(p.positions.find((x) => x.asset === "cash:AUD").gain, 0);
+  assert.equal(cents(p.total), 10250);
+});
+
+test("after a base change, cash bought with AUD gains through the AUD rate", () => {
+  const { quotes, states } = withCash({
+    "EURUSD=X": rateQuote("EURUSD=X", 1.09, 1.08, "USD"),
+    "AUDUSD=X": rateQuote("AUDUSD=X", 0.66, 0.66, "USD"),
+  }, "USD");
+  const p = valuePortfolio([cashHoldings[0]], quotes, states, "USD");
+  assert.equal(cents(p.positions[0].value), 5450);
+  assert.equal(cents(p.positions[0].gain), cents(5450 - 5000 * 1.6 * 0.66));
+});
+
+test("a portfolio of base cash alone charts flat", () => {
+  const s = combinedSeries([cashHoldings[1]], cashSeries(["cash:AUD"], {}, "AUD", "1M", CASH_NOW), {}, "1M", "AUD");
+  assert.ok(s.points.length >= 2);
+  assert.deepEqual(rangeChange(s), { change: 0, pct: 0 });
 });

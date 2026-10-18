@@ -153,3 +153,7 @@ test("snapSeconds refuses misplaced separators", () => {
   assert.equal(snapSeconds("1,2,0", 60, 86400), null);
   assert.deepEqual(snapSeconds("1,200", 60, 86400), { seconds: 1200, snapped: false });
 });
+
+test("cash search results are labelled cash", () => {
+  assert.equal(kindLabel("cash"), "cash");
+});
