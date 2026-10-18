@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   portfolioRows, watchRows, portfolioHero, assetHero, statusLines, historyAssets,
-  portfolioSeries, seriesDirection, rangeLine, chartPoints, chartNote,
+  portfolioSeries, seriesDirection, rangeLine, chartPoints, chartNote, chartHover, hoverLabel,
 } from "../lib/panel.mjs";
 import { valuePortfolio } from "../lib/portfolio.mjs";
 import { holdingKey } from "../lib/holdings.mjs";
@@ -478,4 +478,33 @@ test("cash rows: not found for an unknown currency, the stale warning from its r
 
 test("cash does not count towards Markets closed", () => {
   assert.deepEqual(statusLines(["cash:EUR"], cashData("closed")), []);
+});
+
+// ---- Chart hover
+
+test("chart hover: the point nearest the pointer, where the chart draws it", () => {
+  const points = [[0, 10], [1, 20], [2, 15]];
+  const drawn = chartPoints(points, 100, 50, 2);
+  assert.deepEqual(chartHover(points, 100, 50, 2, 0), { index: 0, x: drawn[0][0], y: drawn[0][1] });
+  assert.deepEqual(chartHover(points, 100, 50, 2, 60), { index: 1, x: drawn[1][0], y: drawn[1][1] });
+  // Outside the chart it holds to the nearest end.
+  assert.equal(chartHover(points, 100, 50, 2, -5).index, 0);
+  assert.equal(chartHover(points, 100, 50, 2, 250).index, 2);
+  assert.equal(chartHover([[0, 1]], 100, 50, 2, 10), null);
+});
+
+test("hover label: value, change from the range's start, and a time that suits the range", () => {
+  // The portfolio is whole money in the base currency; one asset is priced as its price is.
+  const t0 = new Date(2025, 9, 6, 10, 0).getTime();
+  const t1 = new Date(2025, 9, 12, 14, 5).getTime();
+  const portfolio = { asset: "portfolio", currency: "AUD", points: [[t0, 100000], [t1, 102100]] };
+  assert.equal(hoverLabel(portfolio, 1, "1M", "AUD"), "$102,100 · ▲ 2.1% · 12 Oct");
+  assert.equal(hoverLabel(portfolio, 1, "1D", "AUD"), "$102,100 · ▲ 2.1% · 14:05");
+  assert.equal(hoverLabel(portfolio, 1, "1W", "AUD"), "$102,100 · ▲ 2.1% · Sun 14:05");
+  assert.equal(hoverLabel(portfolio, 1, "1Y", "AUD"), "$102,100 · ▲ 2.1% · 12 Oct 2025");
+  assert.equal(hoverLabel(portfolio, 0, "3M", "AUD"), "$100,000 · — 0.0% · 6 Oct");
+  const nvda = { asset: "NVDA", currency: "USD", points: [[t0, 192], [t1, 190.5]] };
+  assert.equal(hoverLabel(nvda, 1, "6M", "AUD"), "US$190.50 · ▼ 0.8% · 12 Oct");
+  // A start of 0 has no percentage to give.
+  assert.equal(hoverLabel({ asset: "portfolio", currency: "AUD", points: [[t0, 0], [t1, 5]] }, 1, "1M", "AUD"), "$5 · 12 Oct");
 });

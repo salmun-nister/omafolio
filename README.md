@@ -18,7 +18,9 @@ should be updating but is not is marked with a warning.
 The panel has Portfolio and Watchlist tabs, a chart for 1D, 1W, 1M, 3M, 6M or 1Y, and a
 row with a sparkline for every asset. Each row's percentage is its move over the
 range you pick: the day move on 1D, otherwise the change across its sparkline.
-Click a row, or step through rows with `j` and `k`, to see that position on its
+Hover the chart to see a point's value, its move since the start of the range and
+when it was. The portfolio chart values today's holdings at each past price, as if
+you had held them throughout: holdings have no purchase dates. Click a row, or step through rows with `j` and `k`, to see that position on its
 own.
 
 | Portfolio | One position | Watchlist |

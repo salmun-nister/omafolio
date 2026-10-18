@@ -11,7 +11,8 @@ import "lib/panel.mjs" as PanelLib
 // Clicking a row (or j/k) turns the hero into that asset and highlights the row;
 // "← Portfolio" or Esc goes back. The range picker (1D/1W/1M/3M/6M/1Y, opening on the
 // `range` setting) drives the chart, the row sparklines and the rows' moves; history is asked of
-// MarketService while the panel is open. The gear opens the settings page.
+// MarketService while the panel is open. Hovering the chart marks the nearest point with its
+// value, move and time. The gear opens the settings page.
 //
 // Owns only view state (tab, selected row, range). What each line says comes
 // from lib/panel.mjs; prices, history and health from the shared MarketService.
@@ -458,11 +459,17 @@ Panel {
             }
 
             Item {
+              id: chartBox
               Layout.fillWidth: true
               Layout.topMargin: Style.space(12)
               implicitHeight: Style.space(76)
 
+              // The point under the pointer while it is over the chart, else null.
+              readonly property var hover: chartPointer.containsMouse && root.chartSeries
+                ? PanelLib.chartHover(root.chartSeries.points, width, height, chart.pad, chartPointer.mouseX) : null
+
               Sparkline {
+                id: chart
                 anchors.fill: parent
                 points: root.chartSeries ? root.chartSeries.points : []
                 color: root.moveColor(PanelLib.seriesDirection(root.chartSeries))
@@ -475,6 +482,70 @@ Panel {
                 visible: !root.chartSeries || root.chartSeries.points.length < 2
                 text: root.panelData ? PanelLib.chartNote(root.panelData, root.seriesByAsset, root.shownAsset) : ""
               }
+
+              MouseArea {
+                id: chartPointer
+                anchors.fill: parent
+                hoverEnabled: true
+                acceptedButtons: Qt.NoButton
+              }
+
+              // Hover marker: a faint guide down the chart, a dot on the line, and the point's
+              // value, move and time in a label above the dot (below it near the top), kept
+              // inside the chart's edges.
+              Rectangle {
+                visible: chartBox.hover !== null
+                x: chartBox.hover ? Math.round(chartBox.hover.x) : 0
+                width: 1
+                height: parent.height
+                color: root.dim
+                opacity: 0.4
+              }
+
+              Rectangle {
+                visible: chartBox.hover !== null
+                width: Style.space(7)
+                height: width
+                radius: width / 2
+                x: chartBox.hover ? chartBox.hover.x - width / 2 : 0
+                y: chartBox.hover ? chartBox.hover.y - height / 2 : 0
+                color: chart.color
+                border.color: Color.popups.background
+                border.width: 1.5
+              }
+
+              Rectangle {
+                id: hoverTag
+                visible: chartBox.hover !== null
+                width: hoverText.implicitWidth + Style.space(12)
+                height: hoverText.implicitHeight + Style.space(6)
+                radius: Style.space(4)
+                color: Color.popups.background
+                border.color: Color.popups.border
+                x: chartBox.hover ? Math.max(0, Math.min(parent.width - width, chartBox.hover.x - width / 2)) : 0
+                y: !chartBox.hover ? 0 : (chartBox.hover.y - height - Style.space(6) >= 0
+                  ? chartBox.hover.y - height - Style.space(6) : chartBox.hover.y + Style.space(6))
+
+                Text {
+                  id: hoverText
+                  anchors.centerIn: parent
+                  textFormat: Text.PlainText
+                  color: root.fg
+                  font.family: root.fontFamily
+                  font.pixelSize: Style.font.bodySmall
+                  text: chartBox.hover && root.panelData
+                    ? PanelLib.hoverLabel(root.chartSeries, chartBox.hover.index, root.range, root.panelData.baseCurrency) : ""
+                }
+              }
+            }
+
+            // The portfolio chart values today's holdings at each past price: there are no
+            // purchase dates to know when a holding began.
+            Caption {
+              Layout.fillWidth: true
+              Layout.topMargin: Style.space(4)
+              visible: root.shownAsset === "" && root.portfolioTab && chart.line.length > 0
+              text: "Assumes today's holdings throughout"
             }
           }
 

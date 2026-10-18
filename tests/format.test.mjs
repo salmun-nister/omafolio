@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
+  formatDate,
   currencyPrefix,
   formatMoney,
   formatPrice,
@@ -244,4 +245,11 @@ test("bar price: the 7-character rule applies to the number only", () => {
 test("bar price: no number is a bare dash, with no prefix", () => {
   assert.equal(formatBarPrice(NaN, "USD", "AUD"), "—");
   assert.equal(formatBarPrice(Infinity, "USD", "AUD"), "—");
+});
+
+test("formatDate: day and short month in local time, the year when asked", () => {
+  const t = new Date(2025, 9, 12, 14, 5).getTime();
+  assert.equal(formatDate(t, false), "12 Oct");
+  assert.equal(formatDate(t, true), "12 Oct 2025");
+  assert.equal(formatDate(new Date(2026, 0, 3).getTime(), false), "3 Jan");
 });
