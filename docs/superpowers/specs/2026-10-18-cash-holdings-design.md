@@ -24,7 +24,9 @@ Success looks like this:
 - A missing or stale exchange rate is handled exactly as a missing or stale
   stock price is.
 
-Out of scope: cash on the watchlist and in the bar rotation; interest on cash.
+Cash can also be watched or put in the bar rotation, where it shows the
+exchange rate; that costs nothing extra, since quotes are derived for every
+cash asset the user follows. Out of scope: interest on cash.
 
 ## Decisions taken
 
@@ -79,53 +81,69 @@ A cash holding is an ordinary entry:
   through the existing `<costCurrency><BASE>=X` rate as any cost is.
 
 `holdings.defaultCostCurrency` returns the base currency for cash, as it does
-for crypto. `holdings.addHolding` gains an optional starting cost: for cash the
-settings page passes the current rate when it is known, so a new cash holding
-starts at no gain, and 1 for cash in the base currency. Without a known rate
-the cost starts at 0, as for every other holding.
+for crypto, and `holdings.editHolding` never drops a cash entry's
+`costCurrency` (it drops it for a listed asset when it equals the listing
+currency). `holdings.addHolding` gains an optional starting cost: for cash the
+settings page passes `cash.startingCost`, the current rate when it is known, so
+a new cash holding starts at no gain, and 1 for cash in the base currency.
+Without a known rate the cost starts at 0, as for every other holding.
 
 ## lib/cash.mjs
 
-A pure module that owns everything specific to cash:
+A pure module that owns everything specific to cash. Functions take a list of
+assets and pick out the cash ones, so callers pass whatever they follow.
 
-- `isCash(asset)` and `cashCurrency(asset)`.
-- `cashPairs(holdings, baseCurrency)`: the `<CCY><BASE>=X` pairs the cash
-  holdings need, for `market.fxPairs` to fetch. None for cash in the base
-  currency.
-- `cashQuotes(holdings, quotes, baseCurrency)`: a quote per cash asset, keyed
-  by its reference, built from the rate quote. Symbol "EUR cash", name from
-  the currency table ("Euro"), kind `cash`, provider `cash`, currency the base,
-  price and previous close the rate's, `asOf`, `session` and `dayRange` the
-  rate's. Cash in the base currency gets price and previous close 1 and the
-  current time as `asOf`. No quote when the rate quote is absent.
-- `cashStates(holdings, states, baseCurrency)`: a cash asset has its rate's
-  price state; cash in the base currency is always `live`; a currency whose
-  rate Yahoo does not know is `missing`.
-- `cashSeries(asset, seriesByAsset, baseCurrency, range, now)`: the rate's
-  series relabelled to the cash asset; for cash in the base currency, a flat
-  two-point series at 1 spanning the range up to `now`, which never moves the
-  combined chart's start.
-- `searchCash(query, baseCurrency)`: search results for currencies whose code
-  or name matches the query (case-insensitive, "eur", "euro", "yen"), as
-  `SearchResult`s of kind `cash` with exchange "Cash".
+- `isCash(asset)` and `cashCurrency(asset)` ("cash:EUR" -> "EUR").
+- `cashPairs(assets, baseCurrency)`: the `<CCY><BASE>=X` pairs the cash assets
+  need. None for cash in the base currency.
+- `cashQuotes(assets, quotes, baseCurrency, now)`: a quote per cash asset,
+  keyed by its reference, built from the rate quote. Symbol "EUR cash", name
+  from the currency table ("Euro", or the code when it is not in the table),
+  kind `cash`, provider `yahoo` (where its price comes from), currency the
+  base, price and previous close the rate's, `asOf`, `session` and `dayRange`
+  the rate's. Cash in the base currency gets price and previous close 1, no
+  session and `asOf` = `now`. No quote when the rate quote is absent.
+- `cashStates(assets, states, baseCurrency)`: a cash asset has its rate's
+  price state (`missing` when the rate has none); cash in the base currency is
+  always `live`.
+- `historySources(assets, baseCurrency)`: the assets whose history must be
+  fetched to draw `assets`: each non-cash asset as is, each foreign cash asset
+  replaced by its rate pair, base-currency cash dropped; each once.
+- `cashSeries(assets, seriesByAsset, baseCurrency, range, now)`: a series per
+  cash asset: the rate's series relabelled to the cash asset; for cash in the
+  base currency, a flat two-point series at 1 from `now` minus the range's
+  span to `now`, which never moves the combined chart's start. No series for
+  foreign cash whose rate has none yet.
+- `startingCost(asset, quotes, baseCurrency)`: 1 for cash in the base
+  currency, the current rate when its quote is known, otherwise 0.
+- `searchCash(query)`: search results for currencies whose code or name
+  contains the query (case-insensitive: "eur", "euro", "yen"), as
+  `SearchResult`s with symbol "EUR cash", name "Euro", kind `cash` and
+  exchange "Cash". Empty for a blank query.
 - A table of about 40 currencies Yahoo prices as `<CCY><BASE>=X`, with names.
-  The table is only for search; a hand-added code outside it still works if
-  Yahoo has the rate.
+  The table is only for search and names; a hand-added code outside it still
+  works if Yahoo has the rate.
 
-`Kind` gains `"cash"`, and `Quote.provider` gains `"cash"`.
+`Kind` gains `"cash"`.
 
 ## Wiring
 
-- `providers/index.mjs`: `providerFor` routes `cash:` references to a
-  provider with no requests, so nothing tries to fetch them. Its id is
-  `cash` and its health is always healthy.
-- `market.fxPairs` adds `cash.cashPairs`.
-- `MarketService.qml` publishes `quotes` and `states` with the cash quotes and
-  states merged in (derived bindings, so they follow every rate update and a
-  base change), and never writes cash quotes to the quote cache. `history()`
-  asks for each cash asset's rate pair and returns `cash.cashSeries` for it.
-  `search()` puts `cash.searchCash` results first, ahead of the provider
-  answers.
+- `providers/index.mjs`: `providerFor` returns Yahoo for `cash:` references,
+  since their prices come from Yahoo's rates. That gives cash Yahoo's health:
+  "…" before Yahoo has answered, "not found" when it answered without the
+  rate, the outage line during an outage.
+- `market.fxPairs` gains the followed assets and adds `cash.cashPairs` for
+  them.
+- `MarketService.qml`: the fetched quotes move to an internal `fetched`
+  property; the public `quotes` and `states` are bindings that add
+  `cash.cashQuotes` and `cash.cashStates` for every followed cash asset, so
+  they follow every rate update and a base change. Cash assets are never
+  asked of a provider (they are left out of what each feed fetches and so are
+  never marked not found themselves), and only fetched quotes are written to
+  the quote cache. `history()` fetches `cash.historySources` and adds
+  `cash.cashSeries`. `search()` shows `cash.searchCash` results at once, first,
+  ahead of the provider answers.
+- `barframe.shortName` names a cash reference "EUR cash".
 - `panel.statusLines` leaves cash out of "Markets closed", as it does rates.
 
 ## Display
@@ -136,8 +154,11 @@ A pure module that owns everything specific to cash:
 - Position hero: title "EUR cash · Euro", "5,000 × $1.62" (amount × current
   rate), the unrealised gain, an "Avg rate" cell in place of "Avg cost", the
   weight, and the rate's day range when Yahoo gives one.
-- Settings page: a cash row labels its fields "Amount" and "Rate"; the rate's
-  currency is shown and can be changed with ▾ as a cost currency can.
+- Settings page: a cash row uses the same Quantity and Avg cost fields (the
+  column headings are shared by every row); the caption under the holdings
+  says that for cash these are the amount and the rate converted at. The
+  rate's currency is shown and can be changed with ▾ as a cost currency can.
+  Search results label cash "cash".
 
 ## Errors and edge cases
 
@@ -163,6 +184,5 @@ A pure module that owns everything specific to cash:
 - `tests/panel.test.mjs`: cash rows, the cash hero with "Avg rate", status line
   ignoring cash.
 - `tests/market.test.mjs` and `tests/providers.test.mjs`: pairs include cash,
-  cash is never requested.
-- `scripts/check-fields.sh`: a cash row shows Amount and Rate.
+  cash routes to Yahoo.
 - README: a Cash section and the holdings file example.
