@@ -2,9 +2,11 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   isCash, cashCurrency, cashPairs, cashQuotes, cashStates, startingCost, searchCash,
+  historySources, cashSeries,
 } from "../lib/cash.mjs";
 
 const NOW = new Date(2026, 9, 18, 12, 0).getTime();
+const DAY = 24 * 3600 * 1000;
 const rate = {
   asset: "EURAUD=X", symbol: "EURAUD=X", name: "EUR/AUD", price: 1.65, previousClose: 1.64,
   currency: "AUD", kind: "fx", asOf: NOW - 60000, provider: "yahoo",
@@ -56,4 +58,27 @@ test("search: by code or name, case-insensitive, blank finds nothing", () => {
   assert.equal(searchCash("Swiss")[0].asset, "cash:CHF");
   assert.deepEqual(searchCash("  "), []);
   assert.deepEqual(searchCash("zzz"), []);
+});
+
+test("history sources: cash becomes its rate pair, base cash needs nothing", () => {
+  assert.deepEqual(historySources(["VOO", "cash:EUR", "cash:AUD", "EURAUD=X"], "AUD"), ["VOO", "EURAUD=X"]);
+});
+
+test("cash series: the rate's series under the cash asset; none while the rate has none", () => {
+  const eur = { asset: "EURAUD=X", currency: "AUD", points: [[0, 1.6], [60000, 1.65]] };
+  const out = cashSeries(["cash:EUR", "cash:JPY", "VOO"], { "EURAUD=X": eur }, "AUD", "1M", NOW);
+  assert.deepEqual(out["cash:EUR"], { asset: "cash:EUR", currency: "AUD", points: eur.points });
+  assert.deepEqual(Object.keys(out), ["cash:EUR"]);
+});
+
+test("cash series: base cash is flat at 1 across the range's span", () => {
+  assert.deepEqual(cashSeries(["cash:AUD"], {}, "AUD", "1W", NOW)["cash:AUD"],
+    { asset: "cash:AUD", currency: "AUD", points: [[NOW - 7 * DAY, 1], [NOW, 1]] });
+  assert.deepEqual(cashSeries(["cash:AUD"], {}, "AUD", "1Y", NOW)["cash:AUD"].points[0], [NOW - 365 * DAY, 1]);
+});
+
+test("cash series: base cash ends where the latest fetched series ends, so a closed market adds no flat tail", () => {
+  const voo = { asset: "VOO", currency: "USD", points: [[NOW - 3 * DAY, 500], [NOW - 2 * DAY, 510]] };
+  assert.deepEqual(cashSeries(["cash:AUD"], { VOO: voo, EMPTY: { asset: "EMPTY", currency: "USD", points: [] } }, "AUD", "1D", NOW)["cash:AUD"].points,
+    [[NOW - 3 * DAY, 1], [NOW - 2 * DAY, 1]]);
 });
