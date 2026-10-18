@@ -420,3 +420,30 @@ test("holdingKey tells holdings apart exactly by (asset, costCurrency)", () => {
   assert.notEqual(holdingKey({ asset: "AAPL", costCurrency: "USD" }), key);
   assert.notEqual(holdingKey({ asset: "MSFT" }), key);
 });
+
+// ---- Cash
+
+test("a cash entry parses, its code normalised to upper case", () => {
+  const r = parseHoldings('{"holdings":[{"asset":"cash:eur","quantity":5000,"cost":1.62,"costCurrency":"AUD"}]}');
+  assert.deepEqual(r.holdings, [{ asset: "cash:EUR", quantity: 5000, cost: 1.62, costCurrency: "AUD" }]);
+  // A capitalised prefix is still cash.
+  assert.equal(parseHoldings('{"holdings":[{"asset":"Cash:usd","quantity":1,"cost":1}]}').holdings[0].asset, "cash:USD");
+});
+
+test("a cash entry with a code that is not three letters fails, naming the entry", () => {
+  for (const asset of ["cash:EURO", "cash:", "cash:E1R"]) {
+    const r = parseHoldings(JSON.stringify({ holdings: [{ asset, quantity: 1, cost: 1 }] }));
+    assert.deepEqual([r.ok, r.error], [false, "Holding entry 1 needs a cash currency of three letters, like cash:EUR."]);
+  }
+});
+
+test("new cash costs in the base currency, starting at the cost given", () => {
+  assert.equal(defaultCostCurrency("cash:EUR", "AUD"), "AUD");
+  assert.deepEqual(addHolding([], "cash:EUR", "AUD", 1.65).holdings, [{ asset: "cash:EUR", quantity: 0, cost: 1.65, costCurrency: "AUD" }]);
+  assert.deepEqual(addHolding([], "VOO", "AUD").holdings, [{ asset: "VOO", quantity: 0, cost: 0 }]);
+});
+
+test("editing cash keeps its cost currency even when it equals the quote's currency", () => {
+  const held = [{ asset: "cash:EUR", quantity: 1, cost: 1.6, costCurrency: "AUD" }];
+  assert.deepEqual(editHolding(held, "cash:EUR", "AUD", { quantity: 2 }, "AUD"), [{ asset: "cash:EUR", quantity: 2, cost: 1.6, costCurrency: "AUD" }]);
+});
