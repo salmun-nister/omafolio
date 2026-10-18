@@ -42,6 +42,8 @@ test("history request ranges", () => {
   assert.match(url("1D"), /range=1d&interval=5m/);
   assert.match(url("1W"), /range=5d&interval=1h/);
   assert.match(url("1M"), /range=1mo&interval=1d/);
+  assert.match(url("3M"), /range=3mo&interval=1d/);
+  assert.match(url("6M"), /range=6mo&interval=1d/);
   assert.match(url("1Y"), /range=1y&interval=1d/);
   assert.equal(yahoo.historyRequests(["A"], "1W", kindOf)[0].range, "1W");
   assert.equal(yahoo.historyRequests(["A"], "1M", kindOf)[0].type, "history");

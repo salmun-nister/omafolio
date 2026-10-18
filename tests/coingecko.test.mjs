@@ -93,6 +93,8 @@ test("history: one request per coin with days per range", () => {
   assert.match(days("1D"), /days=1$/);
   assert.match(days("1W"), /days=7$/);
   assert.match(days("1M"), /days=30$/);
+  assert.match(days("3M"), /days=90$/);
+  assert.match(days("6M"), /days=180$/);
   assert.match(days("1Y"), /days=365$/);
   const reqs = coingecko.historyRequests(["crypto:bitcoin", "crypto:ethereum"], "1W");
   assert.equal(reqs.length, 2);

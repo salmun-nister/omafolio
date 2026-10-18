@@ -15,7 +15,7 @@ should be updating but is not is marked with a warning.
 
 *Sped up: each item shows for 5 seconds by default.*
 
-The panel has Portfolio and Watchlist tabs, a chart for 1D, 1W, 1M or 1Y, and a
+The panel has Portfolio and Watchlist tabs, a chart for 1D, 1W, 1M, 3M, 6M or 1Y, and a
 row with a sparkline for every asset. Each row's percentage is its move over the
 range you pick: the day move on 1D, otherwise the change across its sparkline.
 Click a row, or step through rows with `j` and `k`, to see that position on its
@@ -53,7 +53,7 @@ once. You can also edit the file by hand.
 | `nativePrices` | `true` | Show each asset's price (in the bar and the watchlist) in the asset's own currency. `false` converts those prices to `baseCurrency`. |
 | `refreshSeconds` | `60` | Price refresh interval. The minimum is 60; a lower value is used as 60. |
 | `rotateSeconds` | `5` | Seconds each item stays in the bar. The minimum is 2. |
-| `range` | `1M` | Chart range the panel opens on: `1D`, `1W`, `1M` or `1Y`. |
+| `range` | `1M` | Chart range the panel opens on: `1D`, `1W`, `1M`, `3M`, `6M` or `1Y`. |
 | `bar` | `["crypto:bitcoin"]` | Items to rotate through, in order. `portfolio` is your total; anything else is an asset reference. |
 | `watch` | `[]` | Assets you follow without holding them. |
 

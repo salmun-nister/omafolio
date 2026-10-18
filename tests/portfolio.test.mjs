@@ -332,12 +332,12 @@ test("buckets start at the step-aligned floor of the earliest point and end at t
   assert.deepEqual(s.points.map(([t]) => t), [MONDAY, MONDAY + MIN15, MONDAY + 2 * MIN15, MONDAY + 3 * MIN15]);
   assert.deepEqual(s.points.map(([, v]) => v), [10, 10, 10, 40]);
 });
-test("step widths: 1W is one hour, 1M and 1Y are one day", () => {
+test("step widths: 1W is one hour, 1M, 3M, 6M and 1Y are one day", () => {
   const h = [{ asset: "VOO", quantity: 1, cost: 1 }];
   const voo = series("VOO", "USD", [[MONDAY, 1], [MONDAY + 3 * 3_600_000, 2]]);
   const w = combinedSeries(h, { VOO: voo }, usdQuotes, "1W", "USD");
   assert.deepEqual(w.points.map(([t]) => t - MONDAY), [0, 3_600_000, 2 * 3_600_000, 3 * 3_600_000]);
-  for (const range of ["1M", "1Y"]) {
+  for (const range of ["1M", "3M", "6M", "1Y"]) {
     const d = combinedSeries(h, { VOO: voo }, usdQuotes, range, "USD");
     assert.deepEqual(d.points, [[MONDAY, 2]]);
   }

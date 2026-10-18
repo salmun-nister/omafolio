@@ -9,7 +9,7 @@ import "lib/panel.mjs" as PanelLib
 //   portfolio's value, then one row per holding.
 // - Watchlist: one row per watched asset.
 // Clicking a row (or j/k) turns the hero into that asset and highlights the row;
-// "← Portfolio" or Esc goes back. The range picker (1D/1W/1M/1Y, opening on the
+// "← Portfolio" or Esc goes back. The range picker (1D/1W/1M/3M/6M/1Y, opening on the
 // `range` setting) drives the chart, the row sparklines and the rows' moves; history is asked of
 // MarketService while the panel is open. The gear opens the settings page.
 //
@@ -492,7 +492,7 @@ Panel {
               spacing: Style.space(2)
 
               Repeater {
-                model: ["1D", "1W", "1M", "1Y"]
+                model: ["1D", "1W", "1M", "3M", "6M", "1Y"]
 
                 Item {
                   required property string modelData

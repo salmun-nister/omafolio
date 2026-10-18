@@ -99,6 +99,8 @@ test("cash series: base cash is flat at 1 across the range's span", () => {
   assert.deepEqual(cashSeries(["cash:AUD"], {}, "AUD", "1W", NOW)["cash:AUD"],
     { asset: "cash:AUD", currency: "AUD", points: [[NOW - 7 * DAY, 1], [NOW, 1]] });
   assert.deepEqual(cashSeries(["cash:AUD"], {}, "AUD", "1Y", NOW)["cash:AUD"].points[0], [NOW - 365 * DAY, 1]);
+  assert.deepEqual(cashSeries(["cash:AUD"], {}, "AUD", "3M", NOW)["cash:AUD"].points[0], [NOW - 91 * DAY, 1]);
+  assert.deepEqual(cashSeries(["cash:AUD"], {}, "AUD", "6M", NOW)["cash:AUD"].points[0], [NOW - 182 * DAY, 1]);
 });
 
 test("cash series: base cash ends where the latest fetched series ends, so a closed market adds no flat tail", () => {
